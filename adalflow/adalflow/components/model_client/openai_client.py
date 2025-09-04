@@ -743,11 +743,10 @@ class OpenAIClient(ModelClient):
         )
 
         # Default parsers (will be set dynamically based on sync/async context)
-        # Always initialize to non-streaming parser to ensure a clean starting state
         self.response_parser = self.non_streaming_response_parser
         self.streaming_response_parser = (
             self.streaming_response_parser_async
-        )  # Default to async - kept for backward compatibility
+        )  # Default to async
         # self.chat_completion_parser = self.non_streaming_chat_completion_parser  # COMMENTED OUT
 
     def init_sync_client(self):
@@ -784,7 +783,6 @@ class OpenAIClient(ModelClient):
         """Parse the Response API completion and put it into the raw_response.
         Fully migrated to Response API only."""
 
-        # Get the current parser state at parse time to ensure consistency
         parser = self.response_parser
         log.info(f"completion/response: {completion}, parser: {parser}")
 
@@ -810,11 +808,6 @@ class OpenAIClient(ModelClient):
                 usage=usage
             )
         # Regular response handling (streaming or other)
-        # Ensure we have a valid parser for streaming responses
-        if parser is None:
-            log.warning("Parser is None, defaulting to non-streaming parser")
-            parser = self.non_streaming_response_parser
-            
         data = parser(completion)
         usage = self.track_completion_usage(completion)
         return GeneratorOutput(data=None, error=None, raw_response=data, usage=usage)
@@ -1039,9 +1032,7 @@ class OpenAIClient(ModelClient):
         #         self.chat_completion_parser = self.non_streaming_chat_completion_parser
         #         return self.sync_client.chat.completions.create(**api_kwargs)
         elif model_type == ModelType.LLM_REASONING or model_type == ModelType.LLM:
-            # Check for streaming flag - allow truthy values for streaming
-            is_streaming = bool(api_kwargs.get("stream", False))
-            if is_streaming:
+            if "stream" in api_kwargs and api_kwargs.get("stream", False):
                 log.debug("streaming call")
                 self.response_parser = (
                     self.streaming_response_parser_sync
@@ -1049,7 +1040,6 @@ class OpenAIClient(ModelClient):
                 return self.sync_client.responses.create(**api_kwargs)
             else:
                 log.debug("non-streaming call")
-                # Explicitly set to non-streaming parser to ensure correct state
                 self.response_parser = self.non_streaming_response_parser
                 return self.sync_client.responses.create(**api_kwargs)
 
@@ -1097,9 +1087,7 @@ class OpenAIClient(ModelClient):
         #         # setting response parser as async non-streaming parser for Response API
         #         return await self.async_client.responses.create(**api_kwargs)
         elif model_type == ModelType.LLM or model_type == ModelType.LLM_REASONING:
-            # Check for streaming flag - allow truthy values for streaming
-            is_streaming = bool(api_kwargs.get("stream", False))
-            if is_streaming:
+            if "stream" in api_kwargs and api_kwargs.get("stream", False):
                 log.debug("async streaming call")
                 self.response_parser = (
                     self.streaming_response_parser_async
@@ -1108,7 +1096,6 @@ class OpenAIClient(ModelClient):
                 return await self.async_client.responses.create(**api_kwargs)
             else:
                 log.debug("async non-streaming call")
-                # Explicitly set to non-streaming parser to ensure correct state
                 self.response_parser = self.non_streaming_response_parser
                 # setting response parser as async non-streaming parser for Response API
                 return await self.async_client.responses.create(**api_kwargs)
